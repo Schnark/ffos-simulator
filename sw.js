@@ -1,41 +1,61 @@
-/*global importScripts*/
+/*global importScripts, Promise*/
 (function (worker) {
 "use strict";
 
-/*global SERVER, BASE, CACHE*/
-worker.SERVER = 'https://schnark.github.io'; //'http://localhost:8080'
-worker.BASE = SERVER + '/ffos-simulator/';
-worker.CACHE = 'ffos-simulator';
-
-var VERSION = 1,
+var DEBUG = '', //'a', 'b', ...
+	VERSION = '2.0' + DEBUG,
 	FILES = [
+		'zip/pako.min.js',
 		'zip/zip.js',
-		'zip/ArrayBufferReader.js',
-		'zip/deflate.js',
-		'zip/inflate.js',
 		'sw/ffos.js',
-		'sw/install.js',
 		'sw/static.js',
+		'sw/update.js',
+		'sw/util.js',
+		'app-manager.js',
+		'icon.svg',
 		'index.html',
-		'script.js'
+		'script.js',
+		'style.css'
 	];
 
-/*global zip*/
-importScripts('zip/zip.js');
-importScripts('zip/ArrayBufferReader.js');
-importScripts('zip/deflate.js');
-importScripts('zip/inflate.js');
+/*global SERVER, BASE, CACHE, UPDATE_INTERVAL*/
+worker.SERVER = DEBUG ? 'http://localhost:8000' : 'https://schnark.github.io';
+worker.BASE = SERVER + '/ffos-simulator/';
+worker.MANIFEST = 'github.manifest.webapp';
+worker.CACHE = 'ffos-simulator';
+worker.UPDATE_INTERVAL = DEBUG ? 60 * 1000 : 24 * 60 * 60 * 1000;
 
-zip.useWebWorkers = false;
+importScripts('zip/pako.min.js');
+importScripts('zip/zip.js');
+
+/*global util*/
+importScripts('sw/util.js');
 
 /*global ffos*/
 importScripts('sw/ffos.js');
 
-/*global answerQuery*/
-importScripts('sw/install.js');
-
 /*global staticFiles*/
 importScripts('sw/static.js');
+
+if (UPDATE_INTERVAL) {
+	importScripts('sw/update.js');
+}
+
+function answerQuery (type, args) {
+	var allowedFn = [
+		'install',
+		'update',
+		'uninstall',
+		'checkInstalled',
+		'checkUpdate',
+		'getList',
+		'getUpdates'
+	];
+	if (allowedFn.indexOf(type) === -1) {
+		return Promise.reject('Unknown function');
+	}
+	return ffos[type].apply(ffos, args);
+}
 
 worker.addEventListener('install', function (e) {
 	e.waitUntil(staticFiles.install(CACHE + '-static:' + VERSION, FILES).then(function () {
@@ -50,32 +70,53 @@ worker.addEventListener('activate', function (e) {
 });
 
 worker.addEventListener('fetch', function (e) {
-	var url = e.request.url, parts;
-	if (url.slice(0, BASE.length) === BASE) {
+	var url = e.request.url, searchPos, pathPos, response;
+	if (url.startsWith(BASE)) {
 		url = url.slice(BASE.length);
+		searchPos = url.indexOf('?');
+		if (searchPos > -1) {
+			url = url.slice(0, searchPos);
+		}
+		if (url === '') {
+			url = 'index.html';
+		}
 		if (FILES.indexOf(url) > -1) {
-			e.respondWith(staticFiles.getFile(e.request));
+			response = staticFiles.getFile(BASE + url);
+		} else if (url.startsWith('.options/')) {
+			url = url.slice('.options/'.length);
+			pathPos = url.indexOf('/');
+			if (pathPos === -1) {
+				response = ffos.options.get(url);
+			} else {
+				response = ffos.options.set(url.slice(0, pathPos), url.slice(pathPos + 1));
+			}
 		} else {
-			parts = /^([a-z\-]+)\/([^?]*)/.exec(url);
+			pathPos = url.indexOf('/');
+			if (pathPos > -1 && ffos.getIdType(url.slice(0, pathPos))) {
+				response = ffos.getFile(url.slice(0, pathPos), url.slice(pathPos + 1));
+			}
 		}
 	}
-	if (parts) {
-		e.respondWith(ffos.getFile(parts[1], parts[2]));
+	if (response) {
+		e.respondWith(response.catch(function (error) {
+			return util.getResponse(String(error), util.getContentType('txt'), 404);
+		}));
 	}
 });
 
 worker.addEventListener('message', function (e) {
-	worker.clients.get(e.source.id).then(function (client) {
-		var data;
-		data = e.data;
-		answerQuery(data.type, data.id).then(function (result) {
+	e.waitUntil(worker.clients.get(e.source.id).then(function (client) {
+		var data = {};
+		data.key = e.data.key;
+		answerQuery(e.data.type, e.data.args).then(function (result) {
+			data.success = true;
 			data.result = result;
 			client.postMessage(data);
-		}, function () {
-			data.result = 'failed';
+		}, function (result) {
+			data.result = result;
 			client.postMessage(data);
 		});
-	});
+	}));
 });
 
 })(this);

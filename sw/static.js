@@ -13,7 +13,7 @@ function install (cacheKey, files) {
 function removeOldCache (cachePrefix, version) {
 	return caches.keys().then(function (keys) {
 		return Promise.all(keys.map(function (key) {
-			if (key.indexOf(cachePrefix) === 0 && key !== cachePrefix + version) {
+			if (key.startsWith(cachePrefix) && key !== cachePrefix + version) {
 				return caches.delete(key);
 			}
 		}));
@@ -22,7 +22,7 @@ function removeOldCache (cachePrefix, version) {
 
 function getFile (request) {
 	return caches.match(request).then(function (response) {
-		return response || fetch(request);
+		return response || fetch(request); //TODO add to cache if missing for whatever reason?
 	});
 }
 

@@ -3,7 +3,69 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width">
 <title>Firefox OS Simulator</title>
+<link rel="icon" type="image/svg+xml" href="icon.svg" sizes="any">
+<link rel="stylesheet" href="style.css">
+<script src="app-manager.js" defer></script>
 <script src="script.js" defer></script>
 </head><body>
-<p>Please wait …</p>
+<h1>FFOS Simulator</h1>
+<nav hidden><ul>
+<li><a href="?mode=main" data-action="url" id="navlink-main">Main</a></li>
+<li><a href="?mode=app" data-action="url" id="navlink-app">Apps</a></li>
+<li><a href="?mode=install" data-action="url" id="navlink-install">Install</a></li>
+<li><a href="?mode=update" data-action="url" id="navlink-update">Updates</a></li>
+<li><a href="?mode=options" data-action="url" id="navlink-options">Options</a></li>
+<li><a href="?mode=about" data-action="url" id="navlink-about">About</a></li>
+</ul></nav>
+<section id="loading"><p>Please wait …</p></section>
+<section id="main" hidden>
+<p><a href="?mode=app" data-action="url">Manage your apps</a></p>
+<p><a href="?mode=install" data-action="url">Install apps</a></p>
+<p><a href="?mode=update" data-action="url">Check for updates</a></p>
+<p><a href="?mode=options" data-action="url">Change your options</a></p>
+<p><a href="?mode=about" data-action="url">About this simulator</a></p>
+<p>Please note that this Firefox OS Simulator is still experimental and might have bugs. But most functions have been tested and seem to work well.</p>
+</section>
+<section id="app" hidden></section>
+<section id="install" hidden>
+<h2>Install</h2>
+<p>There are three ways to install an app.</p>
+<h3>Install by ID</h3>
+<p><label>ID: <input id="install-id" list="install-id-suggest"><datalist id="install-id-suggest"></datalist></label> <button data-action="install-id">Install</button></p>
+<h3>Install from URL</h3>
+<p><label>URL: <input id="install-url" type="url"></label> <button data-action="install-url">Install</button></p>
+<h3>Install from file</h3>
+<p><label>File: <input id="install-file" type="file"></label> <button data-action="install-file">Install</button></p>
+</section>
+<section id="update" hidden></section>
+<section id="options" hidden>
+<h2>Options</h2>
+<p><label>Update mode: <select id="update-mode">
+<option value="">Manually</option>
+<option value="check">Check automatically</option>
+<option value="update">Update automatically</option>
+</select></label></p>
+<p id="info-area"></p>
+<div id="storage-manager"></div>
+</section>
+<section id="about" hidden>
+<h2>About</h2>
+<dl>
+<dt>What is this?</dt>
+<dd>This is a web app that allows you to run apps written for Firefox OS without modification.</dd>
+<dt>What apps can I run?</dt>
+<dd>Firefox OS had two different types of apps, <i>hosted</i> and <i>packaged</i> apps. Hosted apps are more or less web apps, which can be run in the browser without any special treatment. This web app will only run packaged apps. Note that apps that require special APIs only implemented for Firefox OS will not run correctly, this especially means that almost all privileged apps will not work.</dd>
+<dt>Where can I get apps from?</dt>
+<dd>This app allows installing apps from three different sources: My own apps, any app hosted on a CORS-enabled server (e.g. Github Pages), and any app you downloaded anywhere.</dd>
+<dd>For my own apps you specify the ID, for public apps the URL of the manifest, for other apps the ZIP file.</dd>
+<dt>How should I use this app?</dt>
+<dd>You should choose the apps you want to use and install them. Then run them once and add a bookmark for them to your homescreen. After installation no internet connection is necessary (unless the app itself requires it).</dd>
+<dt>What about updates?</dt>
+<dd>You can check for updates manually, but you can also enable automatic checks or automatic updates.</dd>
+<dd>If you used an app while or immediately before updating it, it might still use the old version for some time, and even update only partially for a short time, so be careful.</dd>
+<dd>Note that apps installed from a ZIP file will not update. You have to uninstall and re-install them.</dd>
+<dt>How does this work?</dt>
+<dd>This app is powered by a ServiceWorker. The directories with the apps actually do not exist, instead the worker code will intercept any call to these files, and extract the required file from the ZIP.</dd>
+</dl>
+</section>
 </body></html>
