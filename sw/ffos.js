@@ -198,7 +198,8 @@ function getLocalisedData (manifest, langs) {
 				return {
 					lang: lang,
 					name: manifest.locales[lang].name || manifest.name,
-					description: manifest.locales[lang].description || manifest.description
+					description: manifest.locales[lang].description || manifest.description,
+					developer: manifest.locales[lang].developer || manifest.developer
 				};
 			}
 			if (lang === manifest.default_locale) {
@@ -209,7 +210,8 @@ function getLocalisedData (manifest, langs) {
 	return {
 		lang: manifest.default_locale,
 		name: manifest.name,
-		description: manifest.description
+		description: manifest.description,
+		developer: manifest.developer
 	};
 }
 
@@ -225,6 +227,13 @@ function getManifestJson (id) {
 			display: manifest.chrome && manifest.chrome.navigation ? 'minimal-ui' :
 				(manifest.fullscreen ? 'fullscreen' : 'standalone')
 		};
+		if (l10n.developer) {
+			//Suggested in https://github.com/w3c/manifest-app-info/pull/47
+			data.publisher = {
+				name: l10n.developer.name,
+				url: l10n.developer.url
+			};
+		}
 		if (manifest.orientation) {
 			data.orientation = manifest.orientation;
 		}

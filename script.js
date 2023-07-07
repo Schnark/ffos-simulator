@@ -1,10 +1,11 @@
 /*global appManager*/
-/*global Promise, Notification, URL, alert, fetch*/
+/*global Promise, Notification, URL, alert, fetch, caches*/
 (function () {
 "use strict";
 
 var allApps = [
 		'barcode-reader',
+		'bible-plus',
 		'calender',
 		'deng',
 		'docviewer',
@@ -38,6 +39,20 @@ function htmlEscape (str) {
 		.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function openTag (tag, attr) {
+	function formatAttr (name, value) {
+		return (value || value === 0 || value === '') ? ' ' + name + '="' + htmlEscape(value) + '"' : '';
+	}
+
+	function formatAttrs (attr) {
+		return Object.keys(attr).map(function (name) {
+			return formatAttr(name, attr[name]);
+		}).join('');
+	}
+
+	return '<' + tag + formatAttrs(attr) + '>';
+}
+
 function formatSize (size) {
 	var sizes = ['B', 'KB', 'MB', 'GB'];
 	while (sizes.length && size > 900) {
@@ -48,8 +63,32 @@ function formatSize (size) {
 	return size + ' ' + sizes[0];
 }
 
-function getIconSrc (icons) {
-	return icons[0].src; //TODO pick best icon
+function getIconSrc (icons, w) {
+	function getWidth (sizes) {
+		var w = /^(\d+)x\d+$/.exec(sizes);
+		return w ? Number(w[1]) : 0;
+	}
+
+	icons.sort(function (a, b) {
+		var wa, wb;
+		wa = getWidth(a.sizes || '');
+		wb = getWidth(b.sizes || '');
+		if (wa === wb) {
+			return 0;
+		}
+		if (wa >= w && wb >= w) {
+			return wa - wb; //both larger than desired width -> prefer smaller
+		}
+		if (wa !== 0 && wb !== 0) {
+			return wb - wa; //else prefer larger
+		}
+		//shouldn't happen, since all icons have an explicit size
+		if (wa >= w || wb >= w) {
+			return wb - wa;
+		}
+		return wa - wb;
+	});
+	return icons[0].src;
 }
 
 function getUrlParams (url) {
@@ -82,22 +121,39 @@ function getAppInfo (app) {
 			return {
 				id: app,
 				isInstalled: isInstalled,
+				lang: manifest.lang,
 				name: manifest.name,
 				description: manifest.description,
-				lang: manifest.lang,
-				icon: getIconSrc(manifest.icons)
+				publisher: manifest.publisher,
+				icon: getIconSrc(manifest.icons, 80)
 			};
 		});
 	});
 }
 
 function formatAppInfo (info) {
+	function formatPublisher (publisher) {
+		var name;
+		if (!publisher) {
+			return '';
+		}
+		name = publisher.name || publisher.url;
+		if (!name) {
+			return '';
+		}
+		name = htmlEscape(name);
+		if (publisher.url) {
+			name = openTag('a', {href: publisher.url, target: '_blank'}) + name + '</a>';
+		}
+		return '<p>by ' + name + '</p>';
+	}
 	return [
-		'<h2 lang="' + htmlEscape(info.lang) + '">' + htmlEscape(info.name) + '</h2>',
-		'<p><img alt="" src="' + htmlEscape(info.id + '/' + info.icon) + '"></p>',
-		'<p lang="' + htmlEscape(info.lang) + '">' + htmlEscape(info.description) + '</p>',
-		'<p><a href="' + info.id + '/">Run app</a></p>',
-		'<p><a href="' + info.id + '/zip-content.html">Show contents</a></p>',
+		openTag('h2', {lang: info.lang}) + htmlEscape(info.name) + '</h2>',
+		'<p>' + openTag('img', {alt: '', src: info.id + '/' + info.icon}) + '</p>',
+		formatPublisher(info.publisher),
+		openTag('p', {lang: info.lang}) + htmlEscape(info.description || '') + '</p>',
+		'<p>' + openTag('a', {href: info.id + '/'}) + 'Run app</a></p>',
+		'<p>' + openTag('a', {href: info.id + '/zip-content.html'}) + 'Show contents</a></p>',
 		info.isInstalled ? '' : '<p><button data-action="install" data-id="' + info.id + '">Install</button></p>',
 		info.isInstalled ? '<p><button data-action="uninstall" data-id="' + info.id + '">Uninstall</button></p>' : '',
 		info.isInstalled ? '<p id="app-info-update">' +
@@ -184,6 +240,16 @@ function runUpdate (id, button) {
 	);
 }
 
+function runUpdateAll (button) {
+	var buttons, i;
+	button.style.display = 'none';
+	buttons = document.querySelectorAll('button[data-update]');
+	for (i = 0; i < buttons.length; i++) {
+		button = buttons[i];
+		runUpdate(button.dataset.id, button);
+	}
+}
+
 function runInstall2 (idOrUrl, button) {
 	var oldHtml = button.innerHTML;
 	button.innerHTML = 'Please wait …';
@@ -200,6 +266,9 @@ function runInstall2 (idOrUrl, button) {
 		function () {
 			button.innerHTML = oldHtml;
 			button.disabled = false;
+			if (idOrUrl.startsWith('blob:')) {
+				URL.revokeObjectURL(idOrUrl);
+			}
 		}
 	);
 }
@@ -225,7 +294,7 @@ function storeUpdateOption (option, infoArea) {
 	} else {
 		permission = Promise.resolve(true);
 	}
-	permission.then(function (allowed) {
+	return permission.then(function (allowed) {
 		if (allowed) {
 			infoArea.innerHTML = '';
 			return fetch('.options/update-mode/' + option).then(
@@ -280,10 +349,12 @@ function showUpdate (options) {
 		list = apps.map(function (app, i) {
 			var size = sizes[i] || 0;
 			return '<li>' + app + (size ? ' (' + formatSize(size) + ')' : '') +
-				' <button data-action="update" data-id="' + app + '">Update</button></li>';
+				' <button data-action="update" data-update data-id="' + app + '">Update</button></li>';
 		});
 		container.innerHTML = '<h2>Updates</h2><ul>' + list.join('') + '</ul>';
-		//TODO Update all
+		if (apps.length > 1) {
+			container.innerHTML += '<p><button data-action="update-all">Update all</button></p>';
+		}
 	}
 
 	container = showPage('update');
@@ -339,14 +410,57 @@ function navigate (url) {
 	}
 }
 
+function getRemovableCaches () {
+	return caches.keys().then(function (keys) {
+		return keys.filter(function (key) {
+			if (/^v\d+\.\d+$/.test(key)) {
+				return true;
+			}
+			key = key.split(':');
+			if (key.length !== 2 || !(/^\d+\.\d+$/.test(key[1]))) {
+				return false;
+			}
+			key = key[0];
+			return allApps.indexOf(key) > -1 || key === 'stundenbuch';
+		});
+	});
+}
+
+function removeCaches (keys) {
+	return Promise.all(keys.map(function (key) {
+		return caches.delete(key);
+	}));
+}
+
 function initStorageManage (area) {
-	var infoArea, persistArea;
+	var infoArea, persistArea, cachesArea;
 	if (!navigator.storage) {
 		return;
 	}
-	area.innerHTML = '<h2>Storage</h2><p id="info-area"></p><p id="persist-area"></p>';
+	area.innerHTML = '<h2>Storage</h2><p id="info-area"></p><p id="persist-area"></p><p id="caches-area"></p>';
 	infoArea = document.getElementById('info-area');
 	persistArea = document.getElementById('persist-area');
+	cachesArea = document.getElementById('caches-area');
+	getRemovableCaches().then(function (keys) {
+		if (keys.length === 0) {
+			return;
+		}
+		//TODO Allow deleting single caches?
+		cachesArea.innerHTML =
+			'From your previous uses of my apps without this FFOS Simulator there are still used caches.<br>' +
+			'Unless you want to continue to use these versions offline, you can delete these old caches.<br>' +
+			'<small>These are: ' + keys.map(function (key) {
+				return '<code>' + htmlEscape(key) + '</code>';
+			}).join(', ') + '</small><br>' +
+			'<button id="remove-caches-button">Remove caches</button>';
+		document.getElementById('remove-caches-button').addEventListener('click', function () {
+			removeCaches(keys).then(function () {
+				cachesArea.textContent = 'The old caches have been removed.';
+			}, function () {
+				cachesArea.textContent = 'Removing the old caches failed.';
+			});
+		});
+	});
 	navigator.storage.estimate().then(function (estimate) {
 		infoArea.textContent = 'Used storage: ' +
 			formatSize(estimate.usage) + '/' + formatSize(estimate.quota) + ' ' +
@@ -394,7 +508,6 @@ function init () {
 		storeUpdateOption(updateModeSelect.value, infoArea);
 	});
 	initStorageManage(document.getElementById('storage-manager'));
-	//TODO call caches.keys().then(function (keys) {}), show the list and allow user to delete caches
 	document.getElementsByTagName('body')[0].addEventListener('click', function (e) {
 		var id;
 		switch (e.target.dataset.action) {
@@ -419,6 +532,9 @@ function init () {
 			break;
 		case 'update':
 			runUpdate(e.target.dataset.id, e.target);
+			break;
+		case 'update-all':
+			runUpdateAll(e.target);
 			break;
 		case 'install-id':
 			runInstall2(document.getElementById('install-id').value, e.target);

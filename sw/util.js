@@ -39,6 +39,7 @@ function getContentType (ext) {
 	var utf8 = '; charset=utf-8'; //assume utf-8 for all text that ca'n't specify encoding internally (like HTML)
 	return {
 		css: 'text/css' + utf8,
+		eot: 'application/vnd.ms-fontobject',
 		gif: 'image/gif',
 		htm: 'text/html',
 		html: 'text/html',
@@ -52,12 +53,17 @@ function getContentType (ext) {
 		oga: 'audio/ogg',
 		ogg: 'audio/ogg',
 		ogv: 'video/ogg',
+		otf: 'font/otf',
 		pdf: 'application/pdf',
 		png: 'image/png',
 		svg: 'image/svg+xml',
+		ttf: 'font/ttf',
+		wasm: 'application/wasm',
+		wav: 'audio/wav',
 		webapp: 'application/x-web-app-manifest+json' + utf8,
 		webm: 'video/webm',
 		woff: 'application/font-woff',
+		woff2: 'font/woff2',
 		xhtml: 'text/html',
 		xml: 'text/xml',
 		zip: 'application/zip'
