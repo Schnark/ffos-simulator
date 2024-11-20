@@ -7,11 +7,13 @@ var allApps = [
 		'barcode-reader',
 		'bible-plus',
 		'calender',
+		'colors',
 		'deng',
 		'docviewer',
 		'emoticons',
 		'fall',
 		//'ffosapp-installer', (doesn't work in modern browsers)
+		'file-transfer',
 		'fortune',
 		'mandelbrot',
 		'math',
