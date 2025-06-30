@@ -243,17 +243,87 @@ function getManifestJson (id) {
 
 function getZipContentHtml (id) {
 	return getZip(id).then(util.zip.getContent).then(function (files) {
-		var html;
-		//TODO folder structure
-		html = files.map(function (file) {
-			file = util.htmlEscape(file);
-			return '<li><a href="' + file + '">' + file + '</a></li>';
+		var currentFolder = '/',
+			html = [],
+			i, pos, folder, name;
+
+		files = files.map(function (entry) {
+			//prepend / if necessary
+			if (entry.charAt(0) === '/') {
+				return entry;
+			}
+			return '/' + entry;
+		}).filter(function (entry) {
+			//drop directories
+			return entry.slice(-1) !== '/';
+		}).sort(function (a, b) {
+			//sort directories before files
+			a = a.split('/');
+			b = b.split('/');
+			while (a[0] === b[0]) {
+				a.shift();
+				b.shift();
+			}
+			if (a.length === 1 && b.length === 1) {
+				return a[0] < b[0] ? -1 : 1;
+			} else if (a.length === 1) { /* && b.length > 1 */
+				return 1;
+			} else if (b.length === 1) { /* && a.length > 1 */
+				return -1;
+			} else { /* a.length > 1 && b.length > 1 */
+				return a[0] < b[0] ? -1 : 1;
+			}
 		});
+
+		function changeFolder (from, to) {
+			var equal = 0, i;
+			from = from.split('/');
+			to = to.split('/');
+			while (from[equal] === to[equal]) {
+				equal++;
+			}
+			for (i = equal; i < from.length - 1; i++) {
+				html.push('</ul></li>');
+			}
+			for (i = equal; i < to.length - 1; i++) {
+				//TODO allow open/close?
+				html.push('<li class="folder">' + util.htmlEscape(to[i]) + '/<ul>');
+			}
+		}
+
+		for (i = 0; i < files.length; i++) {
+			pos = files[i].lastIndexOf('/');
+			folder = files[i].slice(0, pos + 1);
+			name = files[i].slice(pos + 1);
+			if (folder !== currentFolder) {
+				changeFolder(currentFolder, folder);
+				currentFolder = folder;
+			}
+			html.push('<li><a href="' + util.htmlEscape(files[i]) + '">' + util.htmlEscape(name) + '</a></li>');
+		}
+		if (currentFolder !== '/') {
+			changeFolder(currentFolder, '/');
+		}
+
 		html.unshift(
 			'<!DOCTYPE html>',
 			'<html><head>',
 			'<meta charset="utf-8">',
 			'<title>Content of ' + id + '.zip</title>',
+			'<style>',
+				'html {',
+					'font: 16px/1.8 monospace;',
+				'}',
+				'li {',
+					'list-style: none;',
+				'}',
+				'li::before {',
+					'content: "🗋 ";',
+				'}',
+				'li.folder::before {',
+					'content: "🗁 ";',
+				'}',
+			'</style>',
 			'</head><body>',
 			'<ul>'
 		);

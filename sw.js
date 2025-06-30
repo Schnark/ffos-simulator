@@ -3,7 +3,7 @@
 "use strict";
 
 var DEBUG = '', //'a', 'b', ...
-	VERSION = '2.2' + DEBUG,
+	VERSION = '2.3' + DEBUG,
 	FILES = [
 		'zip/pako.min.js',
 		'zip/zip.js',
