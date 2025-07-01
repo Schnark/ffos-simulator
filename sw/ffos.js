@@ -299,7 +299,7 @@ function getZipContentHtml (id) {
 				changeFolder(currentFolder, folder);
 				currentFolder = folder;
 			}
-			html.push('<li><a href="' + util.htmlEscape(files[i]) + '">' + util.htmlEscape(name) + '</a></li>');
+			html.push('<li><a href="' + util.htmlEscape(files[i].slice(1)) + '">' + util.htmlEscape(name) + '</a></li>');
 		}
 		if (currentFolder !== '/') {
 			changeFolder(currentFolder, '/');
